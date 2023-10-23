@@ -257,6 +257,8 @@ function RightSlice(){
 
 function GoToStartScreen(){
     GAMESTATE = 0;
+    enemyList = []; // clear array
+    
 }
 
 function GoToGame(){
