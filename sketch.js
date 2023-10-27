@@ -22,6 +22,32 @@ var nextX = 0;
 var nextY = 0;
 var nextScale = 5;
 
+//will hold all enemies
+var enemyList = [];
+//will hold all projectiles
+var projectileList = [];
+
+//list of potential enemy colors
+colorList = ['#ff8bf9','#bea6ff','#6a98b6'];
+
+//WAVE SYSTEM
+var curWave = 1;
+var enemiesToSpawn = 3;
+var projectilesToSpawn = 10;
+var spawnTime = 100;
+var spawnTimer = 50;
+var projSpawnTime = 50;
+var projSpawnTimer = 50;
+
+//SCREEN UI
+var startAlpha = 0;
+var gameAlpha = 0;
+var endAlpha = 0;
+
+//SCORE
+var totalPoints = 0;
+var highScore = 0;
+
 //player object
 let player = {
     //positions
@@ -42,8 +68,30 @@ let player = {
     innerRange: 150,
     isMoving: false,
     successfulBlock: false,
-    hp: 3,
+    hp: 10,
+    maxhp: 10,
+    reset: function(){
+        //positions
+        this.x= 0;
+        this.nextX= 0;
+        this.y= 0;
 
+        //body size
+        this.s= 50;
+        
+        //sword properties
+        this.swordY= -.5;
+        this.swordSize= 4;
+        this.swordHeight= 40;
+        //outer range to slice
+        this.sRange= 300; // should lerp to this point
+        //inner range to block
+        this.innerRange= 150;
+        this.isMoving= false;
+        this.successfulBlock= false;
+        this.hp= 10;
+        this.maxhp= 10;
+    },
     display: function() {
         push();
         noStroke();
@@ -80,22 +128,19 @@ let player = {
 
         if(keyIsDown(LEFT_ARROW)){
             TryBlock(true);
+            this.swordY = lerp(this.swordY, -3.5, .5);
         } else if (keyIsDown(RIGHT_ARROW)) {
             TryBlock(false);
+            this.swordY = lerp(this.swordY, -3.5, .5);
         } else {
             this.successfulBlock = false;
+            this.swordY = lerp(this.swordY, -.5, .3);
         }
         pop();
     }
 };
 
-//will hold all enemies
-var enemyList = [];
-//will hold all projectiles
-var projectileList = [];
 
-//list of potential enemy colors
-colorList = ['#ff8bf9','#bea6ff','#6a98b6'];
 //enemy class
 class Enemy {
     //direction determines enemy movement. -1->left, 0->nothing, 1->right
@@ -109,6 +154,7 @@ class Enemy {
     s = 50;
     //color
     col;
+    scoreValue = 100;
     constructor(direction, speed, x){
         this.direction = direction;
         this.speed = speed;
@@ -151,6 +197,7 @@ class Projectile {
     t = 0;
     //color
     col;
+    scoreValue = 50;
     constructor(direction, speed, x){
         this.direction = direction;
         this.speed = speed;
@@ -164,7 +211,8 @@ class Projectile {
         fill(this.col);
         this.t += 1;
         translate(this.x,this.y);
-        rotate(this.t/10 * this.direction);
+        
+        rotate(this.t*10 * this.direction);
         triangle(0,-this.s/2,-this.s/2, this.s/2,this.s/2,this.s/2)
         if(this.x > player.x) { //right
             this.direction = -1;
@@ -183,18 +231,6 @@ class Projectile {
     }
 }
 
-//WAVE SYSTEM
-var curWave = 1;
-var enemiesToSpawn = 3;
-var spawnTime = 100;
-var spawnTimer = 50;
-var projSpawnTime = 50;
-var projSpawnTimer = 50;
-
-//SCREEN UI
-var startAlpha = 0;
-var gameAlpha = 0;
-var endAlpha = 0;
 
 function preload() {
     fontRegular = loadFont('assets/Raleway-Regular.ttf');
@@ -234,6 +270,7 @@ function draw() {
             drawStringOverlayed(player.x + 130,-10, "BALL\nBLADE\nHALL", 15, startAlpha);
             drawString(player.x + 130,20, "a game by taneim miah", 5, startAlpha);
             drawString(player.x + 130,31, "press SPACE to start", 8, startAlpha);
+            
             //UI LERPERS
             startAlpha = lerp(startAlpha, 255, .05);
             gameAlpha = lerp(gameAlpha, 0, .05);
@@ -265,8 +302,11 @@ function draw() {
                 projectileList[i].display();
             }
             //display UI
-            drawStringOverlayed(130,-10, "BALL\nBLADE\nHALL", 15, startAlpha);
-            drawString(130,20, "a game by taneim miah", 5, startAlpha);
+            drawStringOverlayed(player.x + 130,-10, "BALL\nBLADE\nHALL", 15, startAlpha);
+            drawString(player.x + 130,20, "a game by taneim miah", 5, startAlpha);
+            drawString(player.x + 130,31, "press SPACE to start", 8, startAlpha);
+            drawScoreGame(-nextX-365,nextY-545, gameAlpha);
+            drawHP(-nextX+365,nextY-545,gameAlpha);
             //UI LERPERS
             startAlpha = lerp(startAlpha, 0, .05);
             gameAlpha = lerp(gameAlpha, 255, .05);
@@ -274,33 +314,46 @@ function draw() {
             //display effects
 
             //WAVE SYSTEM
+            if(enemiesToSpawn == 0 && enemyList.length == 0 && projectilesToSpawn == 0 && projectileList.length == 0){
+                curWave+=1;
+                spawnTimer = 200;
+                projSpawnTimer = 200;
+                enemiesToSpawn = 5*(curWave-1) + 3;
+                projectilesToSpawn = 15*(curWave-1)+10;
+            }
             if(spawnTimer > 0){
                 spawnTimer-=1;
             }else{
-                spawnTimer = spawnTime;
-                var randDir = random(0,100);
-                if(randDir <50){
-                    randDir = -1;
-                } else {
-                    randDir = 1;
-                }
-                enemyList.push(new Enemy(randDir, 2, player.x+randDir*-500));
-                
+                if(enemiesToSpawn > 0){
+                    spawnTimer = spawnTime;
+                    var randDir = random(0,100);
+                    if(randDir <50){
+                        randDir = -1;
+                    } else {
+                        randDir = 1;
+                    }
+                    enemyList.push(new Enemy(randDir, 2, player.x+randDir*-500));
+                    enemiesToSpawn-=1;
+                }   
             }
             if(projSpawnTimer > 0){
                 projSpawnTimer-=1;
             }else{
-                projSpawnTimer = projSpawnTime;
-                var randDir = random(0,100);
-                if(randDir <50){
-                    randDir = -1;
-                } else {
-                    randDir = 1;
+                if(projectilesToSpawn > 0){
+                    projSpawnTimer = projSpawnTime;
+                    var randDir = random(0,100);
+                    if(randDir <50){
+                        randDir = -1;
+                    } else {
+                        randDir = 1;
+                    }
+                    projectileList.push(new Projectile(randDir,4,player.x+randDir*-500));
+                    projectilesToSpawn-=1;
                 }
-                projectileList.push(new Projectile(randDir,4,player.x+randDir*-500));
             }
             break;
         case 2:
+            //END SCREEN
 
             break;
         default:
@@ -308,16 +361,71 @@ function draw() {
     }
 }
 
-function drawStringOverlayed(x, y, str, size, a){
+function drawHP(x,y,a){
     push();
-    textAlign(RIGHT, CENTER);
-    textFont(fontBold);
-    textSize(size);
-    var c = color('#da5954');
+    noStroke();
+    translate(x,y);
+    angleMode(DEGREES);
+    scale(-1,1);
+    rotate(7);
+    var c = color("#282130");
     c.setAlpha(a);
     fill(c);
-    text(str, x+.5, y+.5);
-    c = color('#ff8181');
+    rect(2,2,200,50);
+    c = color("#282130");
+    c.setAlpha(a);
+    fill(c);
+    rect(2+80,2,200-80,75);
+    c = color("#49374a")
+    c.setAlpha(a);
+    fill(c);
+    rect(0,0,200,50);
+    c = color("#ff4040")
+    c.setAlpha(a);
+    fill(c);
+    rect(0,0,200 * player.hp/player.maxhp,50);
+    scale(-1,1);
+    drawStringOverlayed(-86,2+50,"HEALTH",20,a,color('#87114e'),color('#d0299b'), RIGHT, TOP, 1)
+    drawStringOverlayed(-200+2,50-2,player.hp,25,a,color('#7b080c'),color('#f9391c'), LEFT, TOP, 1.5);
+    pop();
+}
+  
+function drawScoreGame(x, y, a){
+    push();
+    noStroke();
+    translate(x, y);
+    angleMode(DEGREES);
+    rotate(7);
+    var c = color("#282130");
+    c.setAlpha(a);
+    fill(c);
+    rect(2,2,200,50);
+    c = color("#282130");
+    c.setAlpha(a);
+    fill(c);
+    rect(2+80,2,200-80,75);
+    c = color("#49374a")
+    c.setAlpha(a);
+    fill(c);
+    rect(0,0,200,50);
+
+    drawStringOverlayed(12,2,"SCORE",25,a,color('#c41871'),color('#ff32be'), LEFT, TOP, 1)
+    drawStringOverlayed(200-4,50,totalPoints,40,a,color('#7b080c'),color('#f9391c'), RIGHT, BOTTOM, 1.5);
+    drawStringOverlayed(4+80,2+50,"WAVE",20,a,color('#87114e'),color('#d0299b'), LEFT, TOP, 1)
+    drawStringOverlayed(200-4,50-2,curWave,25,a,color('#7b080c'),color('#f9391c'), RIGHT, TOP, 1.5);
+    pop();
+} 
+
+function drawStringOverlayed(x, y, str, size, a, c1 = color('#da5954'), c2= color('#ff8181'), halign = RIGHT, valign = CENTER, diff = .5){
+    push();
+    textAlign(halign, valign);
+    textFont(fontBold);
+    textSize(size);
+    var c = c1;
+    c.setAlpha(a);
+    fill(c);
+    text(str, x+diff, y+diff);
+    c = c2
     c.setAlpha(a);
     fill(c);
     text(str, x, y);
@@ -364,7 +472,9 @@ function keyPressed(){
     } else if(keyCode == 49 || keyCode == 82){
         GoToStartScreen()
     } else if(keyCode == 50 || keyCode == 32){
-        GoToGame()
+        if(GAMESTATE == 0){
+            GoToGame();
+        }
     } else if(keyCode == 51){
         GoToDeathScreen()
     }
@@ -411,6 +521,7 @@ function Slice(isLeft){
     }
     if(currentClosest < player.sRange/2){
         //slice the enemy
+        totalPoints += enemyList[curClosestIndex].scoreValue;
         player.nextX = enemyList[curClosestIndex].x;
         enemyList.splice(curClosestIndex,1);
         player.sRange += 100;
@@ -422,6 +533,7 @@ function Slice(isLeft){
             } else {
                 player.nextX += 20;
             }
+            totalPoints -= 10;
         }
     }
 }
@@ -445,10 +557,13 @@ function TryBlock(isLeft){
            break;
         }
     }
+    player.sRange = constrain(player.sRange-1, 0, 10000);
     if(index != -1){
+        totalPoints += projectileList[index].scoreValue;
         projectileList.splice(index,1);
         player.successfulBlock = true;
         player.sRange += 40;
+        
     }
 }
 
@@ -459,8 +574,11 @@ function GoToStartScreen(){
 
 function GoToGame(){
     GAMESTATE = 1;
+    totalPoints = 0;
+    curWave = 1; 
     enemyList = []; // clear array
     projectileList = [];
+    player.reset();
 }
 
 function GoToDeathScreen(){
