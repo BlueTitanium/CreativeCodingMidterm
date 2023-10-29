@@ -21,19 +21,22 @@ var ceilHeight = 200;
 var nextX = 0;
 var nextY = 0;
 var nextScale = 5;
-
+var nextRot = 0;
+var randRot = 0;
 //will hold all enemies
 var enemyList = [];
 //will hold all projectiles
 var projectileList = [];
+//will hold all effects
+var effectList = [];
 
 //list of potential enemy colors
 colorList = ['#ff8bf9','#bea6ff','#6a98b6'];
 
 //WAVE SYSTEM
 var curWave = 1;
-var enemiesToSpawn = 3;
-var projectilesToSpawn = 10;
+var enemiesToSpawn = 0;
+var projectilesToSpawn = 6;
 var spawnTime = 100;
 var spawnTimer = 50;
 var projSpawnTime = 50;
@@ -43,10 +46,14 @@ var projSpawnTimer = 50;
 var startAlpha = 0;
 var gameAlpha = 0;
 var endAlpha = 0;
-
 //SCORE
 var totalPoints = 0;
 var highScore = 0;
+//health ui
+var hpUI = 1;
+var screenShakeTimer = 0;
+var damageTimer = 0;
+var damageDuration = 20;
 
 //player object
 let player = {
@@ -66,7 +73,6 @@ let player = {
     sRange: 300, // should lerp to this point
     //inner range to block
     innerRange: 150,
-    isMoving: false,
     successfulBlock: false,
     hp: 10,
     maxhp: 10,
@@ -87,10 +93,9 @@ let player = {
         this.sRange= 300; // should lerp to this point
         //inner range to block
         this.innerRange= 150;
-        this.isMoving= false;
         this.successfulBlock= false;
-        this.hp= 10;
-        this.maxhp= 10;
+        this.hp= 6;
+        this.maxhp= 6;
     },
     display: function() {
         push();
@@ -98,7 +103,6 @@ let player = {
 
         this.x = lerp(this.x, this.nextX, 0.1);
         this.sRange = lerp(this.sRange, 300, 0.01);
-        this.isMoving = abs(this.nextX - this.x) > 1;
         this.s = 50 + sin(frameCount/5);
 
         //range
@@ -136,6 +140,10 @@ let player = {
             this.successfulBlock = false;
             this.swordY = lerp(this.swordY, -.5, .3);
         }
+
+        if(GAMESTATE == 1 && this.hp <= 0){
+            GoToDeathScreen();
+        }
         pop();
     }
 };
@@ -164,6 +172,7 @@ class Enemy {
     display(){
         push();
         noStroke();
+        this.col.setAlpha(gameAlpha);
         fill(this.col);
         rectMode(CENTER);
         rect(this.x,this.y, this.s)
@@ -172,13 +181,19 @@ class Enemy {
         } else {
             this.direction = 1;
         }
-        this.x += this.speed * this.direction;
+        if(GAMESTATE==1){
+            this.x += this.speed * this.direction;
 
-        //damage player if colliding
-        if(abs(this.x - player.x) < this.s/2){
-            player.hp -= 1;
-            var ind = enemyList.indexOf(this);
-            enemyList.splice(ind,1);
+            //damage player if colliding
+            if(abs(this.x - player.x) < this.s/2){
+                if(screenShakeTimer <= 0){
+                    player.hp = constrain(player.hp-1, 0, player.maxhp);
+                    screenShakeTimer=20;
+                    damageTimer = damageDuration;
+                }
+                var ind = enemyList.indexOf(this);
+                enemyList.splice(ind,1);
+            }
         }
         pop();
     }
@@ -208,6 +223,7 @@ class Projectile {
     display(){
         push();
         noStroke();
+        this.col.setAlpha(gameAlpha);
         fill(this.col);
         this.t += 1;
         translate(this.x,this.y);
@@ -219,15 +235,49 @@ class Projectile {
         } else {
             this.direction = 1;
         }
-        this.x += this.speed * this.direction;
+        if(GAMESTATE==1){
+            this.x += this.speed * this.direction;
 
-        //damage player if colliding
-        if(abs(this.x - player.x) < this.s/2){
-            player.hp -= 1;
-            var ind = projectileList.indexOf(this);
-            projectileList.splice(ind,1);
+            //damage player if colliding
+            if(abs(this.x - player.x) < this.s/2){
+                if(screenShakeTimer <= 0){
+                    player.hp = constrain(player.hp-1, 0, player.maxhp);
+                    screenShakeTimer=20;
+                    damageTimer = damageDuration;
+                }
+                var ind = projectileList.indexOf(this);
+                projectileList.splice(ind,1);
+            }
         }
         pop();
+    }
+}
+
+class FadingText {
+    x = 0;
+    y = 0;
+    s = 10;
+    spd = 0.5;
+    text = "";
+    timer = 1;
+    dur = 1;
+    constructor(x, y, str, s, dur){
+        this.x = x;
+        this.y = y;
+        this.text = str;
+        this.s = s;
+        this.dur = dur;
+        this.timer = dur;
+    }
+    display(){
+        var a = this.timer/this.dur * 255;
+        this.y-=this.spd;
+        drawStringOverlayed(-nextX+this.x,-nextY+this.y,this.text,this.s,a,color('#87114e'),color('#d0299b'),CENTER,CENTER);
+        this.timer-=1;
+        if(this.timer == 0){
+            var ind = effectList.indexOf(this);
+            effectList.splice(ind,1);
+        }
     }
 }
 
@@ -247,6 +297,14 @@ function setup() {
 function draw() {
     background("#1c1425");
 
+    if(screenShakeTimer > 0){
+        screenShakeTimer--;
+        translate(random(-10,10),random(-10,10));
+    }
+    if(damageTimer>0){
+        damageTimer--;
+    }
+
     //CAMERA INSPIRED FROM ANSWER IN THIS: https://stackoverflow.com/questions/64470290/how-can-i-write-a-line-of-code-for-p5-js-that-works-as-a-camera-follower-for-my
     
     //END VIEW
@@ -260,6 +318,8 @@ function draw() {
             nextY = lerp(nextY, height / 2 , .1);
             translate(width/2, nextY);
             nextScale = lerp(nextScale, 5, 0.025);
+            nextRot = lerp(nextRot, 0, 0.1);
+            rotate(nextRot);
             scale(nextScale);
             translate(nextX, 0);
             //display player
@@ -270,7 +330,11 @@ function draw() {
             drawStringOverlayed(player.x + 130,-10, "BALL\nBLADE\nHALL", 15, startAlpha);
             drawString(player.x + 130,20, "a game by taneim miah", 5, startAlpha);
             drawString(player.x + 130,31, "press SPACE to start", 8, startAlpha);
-            
+            rotate(-nextRot);
+            drawStringOverlayed(player.x,player.y-40,"GAME OVER",50,endAlpha,color('#1d1187'),color('#c48e2b'),CENTER,CENTER);
+            drawStringOverlayed(player.x+145,player.y-10,"POINTS: "+totalPoints,15,endAlpha,color('#1d1187'),color('#c48e2b'),RIGHT,TOP);
+            drawStringOverlayed(player.x+145,player.y+10,"HIGH SCORE: "+highScore,15,endAlpha,color('#1d1187'),color('#c48e2b'),RIGHT,TOP);
+            drawStringOverlayed(player.x,player.y+50,"PRESS SPACE TO RESTART",20,endAlpha,color('#871134'),color('#e46931'),CENTER,CENTER);
             //UI LERPERS
             startAlpha = lerp(startAlpha, 255, .05);
             gameAlpha = lerp(gameAlpha, 0, .05);
@@ -284,9 +348,10 @@ function draw() {
             nextY = lerp(nextY,height - floorHeight, .1);
             translate(width/2, nextY);
             nextScale = lerp(nextScale, 1.25, 0.025);
+            nextRot = lerp(nextRot, 0, 0.1);
+            rotate(nextRot);
             scale(nextScale); //scale needs to come before the player translate... this took me a long time to debug... thank this video (Coding Challenge #32.1: Agar.io - Part 1 (Basic Game Mechanics) https://www.youtube.com/watch?v=JXuxYMGe4KI for showing the camera movement
             translate(nextX,0);
-
             //display player
             player.display();
 
@@ -301,12 +366,30 @@ function draw() {
             for(i = 0; i<projectileList.length; i++){
                 projectileList[i].display();
             }
+            
             //display UI
             drawStringOverlayed(player.x + 130,-10, "BALL\nBLADE\nHALL", 15, startAlpha);
             drawString(player.x + 130,20, "a game by taneim miah", 5, startAlpha);
             drawString(player.x + 130,31, "press SPACE to start", 8, startAlpha);
             drawScoreGame(-nextX-365,nextY-545, gameAlpha);
             drawHP(-nextX+365,nextY-545,gameAlpha);
+            for(i = 0; i<effectList.length; i++){
+                effectList[i].display();
+            }
+            push();
+            var col = color("#ff0000");
+            col.setAlpha(damageTimer*60/(damageDuration));
+            fill(col);
+            noStroke();
+            rect(-nextX-width,-nextY-height,2*width,2*height);
+            pop();
+            if(curWave == 1){
+                drawStringOverlayed(-nextX,-nextY+340,"HOLD ARROW KEY IN DIRECTION OF INCOMING PROJECTILE",20,gameAlpha,color('#87114e'),color('#d0299b'),CENTER,CENTER);
+                drawStringOverlayed(-nextX,-nextY+360,"to block when it reaches your inner zone",15,gameAlpha,color('#87114e'),color('#d0299b'),CENTER,CENTER);
+            } else if(curWave == 2){
+                drawStringOverlayed(-nextX,-nextY+340,"RELEASE ARROW KEY IN DIRECTION OF INCOMING ENEMY",20,gameAlpha,color('#87114e'),color('#d0299b'),CENTER,CENTER);
+                drawStringOverlayed(-nextX,-nextY+360,"to slice when it reaches your outer zone",15,gameAlpha,color('#87114e'),color('#d0299b'),CENTER,CENTER);
+            }
             //UI LERPERS
             startAlpha = lerp(startAlpha, 0, .05);
             gameAlpha = lerp(gameAlpha, 255, .05);
@@ -316,10 +399,19 @@ function draw() {
             //WAVE SYSTEM
             if(enemiesToSpawn == 0 && enemyList.length == 0 && projectilesToSpawn == 0 && projectileList.length == 0){
                 curWave+=1;
+                effectList.push(new FadingText(0, 200, "WAVE "+curWave,65,100));
                 spawnTimer = 200;
                 projSpawnTimer = 200;
-                enemiesToSpawn = 5*(curWave-1) + 3;
-                projectilesToSpawn = 15*(curWave-1)+10;
+                if(curWave==2){
+                    enemiesToSpawn = 6;
+                    projectilesToSpawn = 0;
+                } else {
+                    enemiesToSpawn = 5*(curWave-1) + 3;
+                    projectilesToSpawn = 15*(curWave-1)+10;
+                }
+                if(player.hp > 0){
+                    player.hp = constrain(player.hp+1, 0, player.maxhp);
+                }
             }
             if(spawnTimer > 0){
                 spawnTimer-=1;
@@ -354,7 +446,55 @@ function draw() {
             break;
         case 2:
             //END SCREEN
+            //CAMERA STUFF
+            nextX = lerp(nextX, -player.x, .1);
+            nextY = lerp(nextY, height / 2 , .1);
+            translate(width/2, nextY);
+            nextScale = lerp(nextScale, 3, 0.05);
+            nextRot = lerp(nextRot, randRot, 0.1);
+            rotate(nextRot);
+            scale(nextScale);
+            translate(nextX, 0);
+            
+            //display player
+            player.display();
+            drawFloor();
+            drawCeil();
+            //display enemies/projectiles
+            for(i = 0; i<enemyList.length; i++){
+                enemyList[i].display();
+            }
+            for(i = 0; i<projectileList.length; i++){
+                projectileList[i].display();
+            }
+            //display UI
+            
+            drawStringOverlayed(player.x + 130,-10, "BALL\nBLADE\nHALL", 15, startAlpha);
+            drawString(player.x + 130,20, "a game by taneim miah", 5, startAlpha);
+            drawString(player.x + 130,31, "press SPACE to start", 8, startAlpha);
 
+            rotate(-nextRot);
+            drawScoreGame(-nextX-365,nextY-545, gameAlpha);
+            drawHP(-nextX+365,nextY-545,gameAlpha);
+
+            push();
+            rotate(nextRot);
+            var col = color("#ff0000");
+            col.setAlpha(60);
+            fill(col);
+            noStroke();
+            rect(-nextX-width,-nextY-height,2*width,2*height);
+            pop();
+            rotate(nextRot);
+            drawStringOverlayed(player.x,player.y-40,"GAME OVER",50,endAlpha,color('#1d1187'),color('#c48e2b'),CENTER,CENTER);
+            drawStringOverlayed(player.x+145,player.y-10,"POINTS: "+totalPoints,15,endAlpha,color('#1d1187'),color('#c48e2b'),RIGHT,TOP);
+            drawStringOverlayed(player.x+145,player.y+10,"HIGH SCORE: "+highScore,15,endAlpha,color('#1d1187'),color('#c48e2b'),RIGHT,TOP);
+            drawStringOverlayed(player.x,player.y+50,"PRESS SPACE TO RESTART",20,endAlpha,color('#871134'),color('#e46931'),CENTER,CENTER);
+            
+            //UI LERPERS
+            startAlpha = lerp(startAlpha, 0, .05);
+            gameAlpha = lerp(gameAlpha, 0, .05);
+            endAlpha = lerp(endAlpha, 255, .05);
             break;
         default:
             break;
@@ -383,7 +523,8 @@ function drawHP(x,y,a){
     c = color("#ff4040")
     c.setAlpha(a);
     fill(c);
-    rect(0,0,200 * player.hp/player.maxhp,50);
+    hpUI = lerp(hpUI, player.hp/player.maxhp, .2);
+    rect(0,0,200 * hpUI,50);
     scale(-1,1);
     drawStringOverlayed(-86,2+50,"HEALTH",20,a,color('#87114e'),color('#d0299b'), RIGHT, TOP, 1)
     drawStringOverlayed(-200+2,50-2,player.hp,25,a,color('#7b080c'),color('#f9391c'), LEFT, TOP, 1.5);
@@ -461,23 +602,22 @@ function drawCeil(){
 }
 
 function keyPressed(){
-    if(keyCode == LEFT_ARROW){
-        if(GAMESTATE == 0){
-            GoToGame();
-        }
-    } else if(keyCode == RIGHT_ARROW){
-        if(GAMESTATE == 0){
-            GoToGame();
-        }
-    } else if(keyCode == 49 || keyCode == 82){
+    if(keyCode == 49 || keyCode == 82){
         GoToStartScreen()
-    } else if(keyCode == 50 || keyCode == 32){
+    } else if(keyCode == 32){
         if(GAMESTATE == 0){
             GoToGame();
         }
-    } else if(keyCode == 51){
+        if(GAMESTATE == 2){
+            GoToStartScreen();
+        }
+    } else if (keyCode == 50) {
+        GoToGame();
+    }
+    else if(keyCode == 51){
         GoToDeathScreen()
     }
+    
 }
 
 function keyReleased(){
@@ -521,19 +661,14 @@ function Slice(isLeft){
     }
     if(currentClosest < player.sRange/2){
         //slice the enemy
-        totalPoints += enemyList[curClosestIndex].scoreValue;
+        UpdatePoints(enemyList[curClosestIndex].scoreValue);
         player.nextX = enemyList[curClosestIndex].x;
         enemyList.splice(curClosestIndex,1);
         player.sRange += 100;
     } else {
         if(!player.successfulBlock){
             player.sRange -= 30;
-            if(isLeft){
-                player.nextX -= 20;
-            } else {
-                player.nextX += 20;
-            }
-            totalPoints -= 10;
+            UpdatePoints(-10);
         }
     }
 }
@@ -559,7 +694,7 @@ function TryBlock(isLeft){
     }
     player.sRange = constrain(player.sRange-1, 0, 10000);
     if(index != -1){
-        totalPoints += projectileList[index].scoreValue;
+        UpdatePoints(projectileList[index].scoreValue);
         projectileList.splice(index,1);
         player.successfulBlock = true;
         player.sRange += 40;
@@ -567,20 +702,43 @@ function TryBlock(isLeft){
     }
 }
 
+function UpdatePoints(value){
+    var str = "" + value;
+    if(value > 0){
+        str = "+" + str;
+    }
+    effectList.push(new FadingText(-150,100,str,30,40));
+    totalPoints += value;
+}
+
 function GoToStartScreen(){
     GAMESTATE = 0;
-   
+    player.nextX = 0;
+    player.x = 0;
+    player.y = 0;
 }
 
 function GoToGame(){
     GAMESTATE = 1;
     totalPoints = 0;
     curWave = 1; 
+    enemiesToSpawn = 0;
+    projectilesToSpawn = 6;
+    spawnTimer = 200;
+    projSpawnTimer = 200;
+    effectList = [];
+    effectList.push(new FadingText(0, 300, "WAVE 1",65,200));
     enemyList = []; // clear array
     projectileList = [];
+    
+    hpUI = 1;
     player.reset();
 }
 
 function GoToDeathScreen(){
     GAMESTATE = 2;
+    if(totalPoints > highScore){
+        highScore = totalPoints;
+    }
+    randRot = random(-10,10);
 }
