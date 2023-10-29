@@ -430,7 +430,9 @@ function draw() {
     if(damageTimer>0){
         damageTimer--;
     }
-
+    if(totalPoints > highScore){
+        highScore = totalPoints;
+    }
     //CAMERA INSPIRED FROM ANSWER IN THIS: https://stackoverflow.com/questions/64470290/how-can-i-write-a-line-of-code-for-p5-js-that-works-as-a-camera-follower-for-my
     
     //END VIEW
@@ -903,8 +905,6 @@ function GoToDeathScreen(){
         menuMusic.loop();
     }
     GAMESTATE = 2;
-    if(totalPoints > highScore){
-        highScore = totalPoints;
-    }
+    
     randRot = random(-7,7);
 }
