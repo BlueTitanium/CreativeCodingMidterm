@@ -416,8 +416,7 @@ function setup() {
     SFXSwordSlice.playMode('sustain');
     menuMusic.setVolume(0.1);
     gameMusic.setVolume(0.1);
-    menuMusic.loop();
-
+    menuMusic.play();
 }
   
 function draw() {
