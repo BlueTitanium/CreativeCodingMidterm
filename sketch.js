@@ -8,7 +8,15 @@ Sideways version of that game.
 
 
 //fonts
-var fontRegular, fontBold;
+var fontRegular, fontBold; // from Google Fonts
+//SFX 
+//https://p5js.org/examples/sound-playback-rate.html says that you can change pitch using playback rate so I'll use that to gain variety
+var SFXSwordSlice, SFXSwordDeflect, SFXSwordMiss; //https://pixabay.com/sound-effects/search/slash/   samurai slash, Sword Hit, Slash
+var SFXDamaged //https://pixabay.com/sound-effects/search/damage/ Punch 2
+//MUSIC
+var menuMusic; //PERITUNE https://peritune.com/blog/2023/01/07/awayuki/ 
+var gameMusic; //PERITUNE https://peritune.itch.io/battle-tracks-jrpg-battle-music-collection PRAIRIE5
+
 
 //A variable to store the current game state so there can be a start, game, and end screens
 var GAMESTATE = 0; // 0 -> START, 1 -> GAME, 2 -> END
@@ -76,6 +84,10 @@ let player = {
     successfulBlock: false,
     hp: 10,
     maxhp: 10,
+
+    //particle trail
+    trail: [],
+    trailCount: 40,
     reset: function(){
         //positions
         this.x= 0;
@@ -96,14 +108,22 @@ let player = {
         this.successfulBlock= false;
         this.hp= 6;
         this.maxhp= 6;
+        this.trail = [];
+        for(i = 1; i <= this.trailCount; i++){
+            this.trail.push(new ParticleTrail(15,.5,i*15/this.trailCount));
+        }
     },
     display: function() {
         push();
         noStroke();
+        
+        for(i = 0; i < this.trail.length; i++){
+            this.trail[i].display();
+        }
 
         this.x = lerp(this.x, this.nextX, 0.1);
-        this.sRange = lerp(this.sRange, 300, 0.01);
-        this.s = 50 + sin(frameCount/5);
+        this.sRange = lerp(this.sRange, 300, 0.0025);
+        this.s = 50 + sin(frameCount*10);
 
         //range
         fill("#ff19192d");
@@ -143,11 +163,41 @@ let player = {
 
         if(GAMESTATE == 1 && this.hp <= 0){
             GoToDeathScreen();
+            var sfx = SFXDamaged;
+            sfx.rate(.7);
+            sfx.play();
         }
         pop();
     }
 };
 
+class ParticleTrail{
+    x = 0;
+    y = 0;
+    originalS = 20;
+    decayRate = 0.5;
+    constructor(s, decayRate = 0.5, startingPoint){
+        this.x = player.x;
+        this.y = player.y + random(-1,1)*3;
+        this.originalS = s;
+        this.s = s - startingPoint;
+        this.decayRate = decayRate;
+    }
+    display(){
+        push();
+        var c =lerpColor(color('#ffffff'),color('#ffffff'), this.s/this.originalS);
+        fill(c);
+        rectMode(CENTER);
+        rect(this.x,this.y,this.s);
+        this.s = constrain(this.s - this.decayRate, 0, this.originalS);
+        if(this.s<=0){
+            this.x = player.x;
+            this.y = player.y + random(-1,1)*3; 
+            this.s = this.originalS;
+        }
+        pop();
+    }
+}
 
 //enemy class
 class Enemy {
@@ -190,6 +240,14 @@ class Enemy {
                     player.hp = constrain(player.hp-1, 0, player.maxhp);
                     screenShakeTimer=20;
                     damageTimer = damageDuration;
+                    var sfx = SFXDamaged;
+                    sfx.rate(random(.8,1.5));
+                    sfx.play();
+                } else { //block because of invincibility period after damaged or attack
+                    effectList.push(new FadingText(random(-20,20), random(250,280), "CLUTCH!",20,40));
+                    var sfx = SFXSwordDeflect;
+                    sfx.rate(random(.8,1.5));
+                    sfx.play();
                 }
                 var ind = enemyList.indexOf(this);
                 enemyList.splice(ind,1);
@@ -244,6 +302,14 @@ class Projectile {
                     player.hp = constrain(player.hp-1, 0, player.maxhp);
                     screenShakeTimer=20;
                     damageTimer = damageDuration;
+                    var sfx = SFXDamaged;
+                    sfx.rate(random(.8,1.5));
+                    sfx.play();
+                } else { //block because of invincibility period after damaged or attack
+                    effectList.push(new FadingText(random(-20,20), random(250,280), "CLUTCH!",20,40));
+                    var sfx = SFXSwordDeflect;
+                    sfx.rate(random(.8,1.5));
+                    sfx.play();
                 }
                 var ind = projectileList.indexOf(this);
                 projectileList.splice(ind,1);
@@ -281,17 +347,77 @@ class FadingText {
     }
 }
 
+class SlashingEffect {
+    x = 0;
+    y = 0;
+    s = 1000;
+    col;
+    angle = 0;
+    growingTime = 30;
+    maxGrowingTime = 5;
+    decayTime = 30;
+    maxDecayTime = 5;
+    constructor(x, y, col){
+        this.x = x;
+        this.y = y;
+        this.col = col;
+        if(this.x > player.x){ //right
+            this.angle = random(-90,90);
+        } else {
+            this.angle = random(90,270);
+        }
+        this.growingTime = this.maxGrowingTime;
+        this.decayTime = this.maxDecayTime;
+        screenShakeTimer = 10;
+    }
+    display(){
+        push();
+        translate(this.x,this.y);
+        rotate(this.angle);
+        strokeCap(SQUARE);
+        stroke(this.col);
+        strokeWeight(5);
+        if(this.growingTime > 0){
+            this.growingTime--;
+            line(0-this.s/2,0, 0-this.s/2+(1-(this.growingTime/this.maxGrowingTime))*this.s, 0);
+        } else if(this.decayTime > 0){
+            this.decayTime--;
+            line(0+this.s/2-(this.decayTime/this.maxDecayTime)*this.s, 0, 0+this.s/2, 0);
+        } else {
+            var ind = effectList.indexOf(this);
+            effectList.splice(ind,1);
+        }
+        pop();
+    }
+}
+
 
 function preload() {
     fontRegular = loadFont('assets/Raleway-Regular.ttf');
     fontBold = loadFont('assets/Raleway-SemiBold.ttf');
+    SFXSwordSlice = loadSound('assets/samurai-slash.mp3');
+    SFXSwordDeflect = loadSound('assets/sword-hit.mp3');
+    SFXSwordMiss = loadSound('assets/slash.mp3');
+    SFXDamaged = loadSound('assets/damaged.mp3');
+    menuMusic = loadSound('assets/menu_music.mp3');
+    gameMusic = loadSound('assets/game_loop.mp3');
+
 }
 
 function setup() {
     createCanvas(900, 400);
+    angleMode(DEGREES);
     nextX = -player.x-50;
     nextY = height / 2;
     startAlpha = 255;
+    //https://p5js.org/examples/sound-play-mode.html
+    SFXSwordDeflect.playMode('sustain');
+    SFXSwordMiss.playMode('sustain');
+    SFXSwordSlice.playMode('sustain');
+    menuMusic.setVolume(0.1);
+    gameMusic.setVolume(0.1);
+    menuMusic.loop();
+
 }
   
 function draw() {
@@ -299,7 +425,8 @@ function draw() {
 
     if(screenShakeTimer > 0){
         screenShakeTimer--;
-        translate(random(-10,10),random(-10,10));
+        var magnitude = screenShakeTimer;
+        translate(random(-1,1)*magnitude,random(-1,1)*magnitude);
     }
     if(damageTimer>0){
         damageTimer--;
@@ -330,7 +457,7 @@ function draw() {
             drawStringOverlayed(player.x + 130,-10, "BALL\nBLADE\nHALL", 15, startAlpha);
             drawString(player.x + 130,20, "a game by taneim miah", 5, startAlpha);
             drawString(player.x + 130,31, "press SPACE to start", 8, startAlpha);
-            rotate(-nextRot);
+            rotate(0);
             drawStringOverlayed(player.x,player.y-40,"GAME OVER",50,endAlpha,color('#1d1187'),color('#c48e2b'),CENTER,CENTER);
             drawStringOverlayed(player.x+145,player.y-10,"POINTS: "+totalPoints,15,endAlpha,color('#1d1187'),color('#c48e2b'),RIGHT,TOP);
             drawStringOverlayed(player.x+145,player.y+10,"HIGH SCORE: "+highScore,15,endAlpha,color('#1d1187'),color('#c48e2b'),RIGHT,TOP);
@@ -397,6 +524,12 @@ function draw() {
             //display effects
 
             //WAVE SYSTEM
+            var speedMult = 1; // make speed increase as waves increase
+            if(curWave > 2){ 
+                speedMult = (4.7*curWave)/(4.7+curWave) - .7; 
+                //approaches 4 multiplied speed after a long time
+                //4 is a REALLY hard speed, but definitely doable :^) (cause i tested it myself )
+            }
             if(enemiesToSpawn == 0 && enemyList.length == 0 && projectilesToSpawn == 0 && projectileList.length == 0){
                 curWave+=1;
                 effectList.push(new FadingText(0, 200, "WAVE "+curWave,65,100));
@@ -407,7 +540,7 @@ function draw() {
                     projectilesToSpawn = 0;
                 } else {
                     enemiesToSpawn = 5*(curWave-1) + 3;
-                    projectilesToSpawn = 15*(curWave-1)+10;
+                    projectilesToSpawn = 10*(curWave-1)+3;
                 }
                 if(player.hp > 0){
                     player.hp = constrain(player.hp+1, 0, player.maxhp);
@@ -417,14 +550,14 @@ function draw() {
                 spawnTimer-=1;
             }else{
                 if(enemiesToSpawn > 0){
-                    spawnTimer = spawnTime;
+                    spawnTimer = spawnTime/speedMult;
                     var randDir = random(0,100);
                     if(randDir <50){
                         randDir = -1;
                     } else {
                         randDir = 1;
                     }
-                    enemyList.push(new Enemy(randDir, 2, player.x+randDir*-500));
+                    enemyList.push(new Enemy(randDir, 2*speedMult, player.x+randDir*-500));
                     enemiesToSpawn-=1;
                 }   
             }
@@ -432,14 +565,14 @@ function draw() {
                 projSpawnTimer-=1;
             }else{
                 if(projectilesToSpawn > 0){
-                    projSpawnTimer = projSpawnTime;
+                    projSpawnTimer = projSpawnTime/speedMult;
                     var randDir = random(0,100);
                     if(randDir <50){
                         randDir = -1;
                     } else {
                         randDir = 1;
                     }
-                    projectileList.push(new Projectile(randDir,4,player.x+randDir*-500));
+                    projectileList.push(new Projectile(randDir,4*speedMult,player.x+randDir*-500));
                     projectilesToSpawn-=1;
                 }
             }
@@ -488,8 +621,8 @@ function draw() {
             rotate(nextRot);
             drawStringOverlayed(player.x,player.y-40,"GAME OVER",50,endAlpha,color('#1d1187'),color('#c48e2b'),CENTER,CENTER);
             drawStringOverlayed(player.x+145,player.y-10,"POINTS: "+totalPoints,15,endAlpha,color('#1d1187'),color('#c48e2b'),RIGHT,TOP);
-            drawStringOverlayed(player.x+145,player.y+10,"HIGH SCORE: "+highScore,15,endAlpha,color('#1d1187'),color('#c48e2b'),RIGHT,TOP);
-            drawStringOverlayed(player.x,player.y+50,"PRESS SPACE TO RESTART",20,endAlpha,color('#871134'),color('#e46931'),CENTER,CENTER);
+            drawStringOverlayed(player.x+145,player.y+5,"HIGH SCORE: "+highScore,15,endAlpha,color('#1d1187'),color('#c48e2b'),RIGHT,TOP);
+            drawStringOverlayed(player.x,player.y+40,"PRESS SPACE TO RESTART",20,endAlpha,color('#871134'),color('#e46931'),CENTER,CENTER);
             
             //UI LERPERS
             startAlpha = lerp(startAlpha, 0, .05);
@@ -505,7 +638,7 @@ function drawHP(x,y,a){
     push();
     noStroke();
     translate(x,y);
-    angleMode(DEGREES);
+    
     scale(-1,1);
     rotate(7);
     var c = color("#282130");
@@ -535,7 +668,7 @@ function drawScoreGame(x, y, a){
     push();
     noStroke();
     translate(x, y);
-    angleMode(DEGREES);
+    
     rotate(7);
     var c = color("#282130");
     c.setAlpha(a);
@@ -663,12 +796,21 @@ function Slice(isLeft){
         //slice the enemy
         UpdatePoints(enemyList[curClosestIndex].scoreValue);
         player.nextX = enemyList[curClosestIndex].x;
+        effectList.push(new SlashingEffect(enemyList[curClosestIndex].x,enemyList[curClosestIndex].y,color("#ffffff")));
         enemyList.splice(curClosestIndex,1);
-        player.sRange += 100;
+        player.sRange = constrain(player.sRange+100, 20, 900);
+        effectList.push(new FadingText(random(-20,20), random(250,280), "SLICE!",20,40));
+        var sfx = SFXSwordSlice;
+        sfx.rate(random(.8,1.5));
+        sfx.play();
     } else {
         if(!player.successfulBlock){
-            player.sRange -= 30;
+            player.sRange = constrain(player.sRange-30, 20, 900);
             UpdatePoints(-10);
+            effectList.push(new FadingText(random(-20,20), random(250,280), "MISS",20,40));
+            var sfx = SFXSwordMiss;
+            sfx.rate(random(.8,1.5));
+            sfx.play();
         }
     }
 }
@@ -695,10 +837,14 @@ function TryBlock(isLeft){
     player.sRange = constrain(player.sRange-1, 0, 10000);
     if(index != -1){
         UpdatePoints(projectileList[index].scoreValue);
+        effectList.push(new SlashingEffect(projectileList[index].x,projectileList[index].y,color("#000000")));
         projectileList.splice(index,1);
         player.successfulBlock = true;
-        player.sRange += 40;
-        
+        player.sRange = constrain(player.sRange+40, 20, 900);
+        effectList.push(new FadingText(random(-20,20), random(250,280), "DEFLECT!",20,40));
+        var sfx = SFXSwordDeflect;
+        sfx.rate(random(1,1.5));
+        sfx.play();
     }
 }
 
@@ -712,13 +858,22 @@ function UpdatePoints(value){
 }
 
 function GoToStartScreen(){
+    gameMusic.stop();
+    if(!menuMusic.isPlaying()){
+        menuMusic.loop();
+    }
     GAMESTATE = 0;
     player.nextX = 0;
     player.x = 0;
     player.y = 0;
+    nextX = -player.x;
+    player.reset();
 }
 
 function GoToGame(){
+    gameMusic.stop();
+    menuMusic.stop();
+    gameMusic.loop();
     GAMESTATE = 1;
     totalPoints = 0;
     curWave = 1; 
@@ -732,13 +887,17 @@ function GoToGame(){
     projectileList = [];
     
     hpUI = 1;
-    player.reset();
+    
 }
 
 function GoToDeathScreen(){
+    gameMusic.stop();
+    if(!menuMusic.isPlaying()){
+        menuMusic.loop();
+    }
     GAMESTATE = 2;
     if(totalPoints > highScore){
         highScore = totalPoints;
     }
-    randRot = random(-10,10);
+    randRot = random(-7,7);
 }
