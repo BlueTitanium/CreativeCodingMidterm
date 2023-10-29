@@ -416,7 +416,7 @@ function setup() {
     SFXSwordSlice.playMode('sustain');
     menuMusic.setVolume(0.1);
     gameMusic.setVolume(0.1);
-    menuMusic.play();
+    GoToStartScreen();
 }
   
 function draw() {
@@ -735,6 +735,9 @@ function drawCeil(){
 
 function keyPressed(){
     if(keyCode == 49 || keyCode == 82){
+        if(GAMESTATE==0){
+            menuMusic.stop();
+        }
         GoToStartScreen()
     } else if(keyCode == 32){
         if(GAMESTATE == 0){
@@ -861,11 +864,16 @@ function GoToStartScreen(){
     if(!menuMusic.isPlaying()){
         menuMusic.loop();
     }
-    GAMESTATE = 0;
+    
     player.nextX = 0;
     player.x = 0;
     player.y = 0;
-    nextX = -player.x;
+    if(GAMESTATE == 0){
+        nextX = -player.x - 50;
+    } else {
+        nextX = -player.x;
+    }
+    GAMESTATE = 0;
     player.reset();
 }
 
