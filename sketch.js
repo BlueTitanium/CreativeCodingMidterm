@@ -8,7 +8,7 @@ Sideways version of that game.
 
 
 //fonts
-var fontRegular, fontBold; // from Google Fonts
+var fontBold; // from Google Fonts
 //SFX 
 //https://p5js.org/examples/sound-playback-rate.html says that you can change pitch using playback rate so I'll use that to gain variety
 var SFXSwordSlice, SFXSwordDeflect, SFXSwordMiss; //https://pixabay.com/sound-effects/search/slash/   samurai slash, Sword Hit, Slash
@@ -455,7 +455,6 @@ class SlashingEffect {
 
 function preload() {
     //load all assets
-    fontRegular = loadFont('assets/Raleway-Regular.ttf');
     fontBold = loadFont('assets/Raleway-SemiBold.ttf');
     SFXSwordSlice = loadSound('assets/samurai-slash.mp3');
     SFXSwordDeflect = loadSound('assets/sword-hit.mp3');
